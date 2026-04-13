@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memory Card Game</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f0;
+      --surface: #ffffff;
+      --surface2: #ededea;
+      --text: #1a1a18;
+      --text2: #666663;
+      --border: rgba(0,0,0,0.12);
+      --green-bg: #eaf3de;
+      --green-border: #639922;
+      --green-text: #3b6d11;
+      --radius: 10px;
+      --radius-lg: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --surface: #2a2a28;
+        --surface2: #333330;
+        --text: #f0eeea;
+        --text2: #9a9a95;
+        --border: rgba(255,255,255,0.12);
+        --green-bg: #173404;
+        --green-border: #639922;
+        --green-text: #c0dd97;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 500; margin-bottom: 1.5rem; letter-spacing: -0.3px; }
+
+    #game-wrap { width: 100%; max-width: 520px; }
+
+    #topbar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .stat {
+      flex: 1; min-width: 70px;
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px; text-align: center;
+    }
+    .stat-label { font-size: 11px; color: var(--text2); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .stat-val   { font-size: 20px; font-weight: 500; }
+
+    #win-banner {
+      display: none;
+      background: var(--green-bg);
+      border: 0.5px solid var(--green-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem; text-align: center; margin-bottom: 1rem;
+    }
+    #win-banner h3 { font-size: 18px; font-weight: 500; color: var(--green-text); margin-bottom: 4px; }
+    #win-banner p  { font-size: 14px; color: var(--green-text); }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px; margin-bottom: 1rem;
+    }
+
+    .card { aspect-ratio: 1; cursor: pointer; perspective: 700px; }
+    .card-inner {
+      width: 100%; height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.38s cubic-bezier(.4,0,.2,1);
+    }
+    .card.flipped .card-inner,
+    .card.matched .card-inner { transform: rotateY(180deg); }
+
+    .card-back, .card-front {
+      position: absolute; inset: 0;
+      backface-visibility: hidden;
+      border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      border: 0.5px solid var(--border);
+      font-size: 2rem; user-select: none;
+    }
+    .card-back  { background: var(--surface); }
+    .card-back::after {
+      content: ""; width: 52%; height: 52%;
+      border-radius: 6px; background: var(--surface2);
+    }
+    .card-front { background: var(--surface); transform: rotateY(180deg); }
+    .card.matched .card-front { background: var(--green-bg); border-color: var(--green-border); }
+
+    #msg { text-align: center; font-size: 14px; color: var(--text2); min-height: 22px; margin-bottom: 10px; }
+
+    #btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    button {
+      padding: 8px 20px;
+      border-radius: var(--radius);
+      border: 0.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer; font-size: 14px; font-family: inherit;
+      transition: background 0.15s;
+    }
+    button:hover  { background: var(--surface2); }
+    button:active { transform: scale(0.97); }
+
+    footer { margin-top: 2rem; font-size: 12px; color: var(--text2); }
+  </style>
+</head>
+<body>
+
+  <h1>🃏 Memory Card Game</h1>
+
+  <div id="game-wrap">
+
+    <div id="topbar">
+      <div class="stat"><div class="stat-label">Moves</div><div class="stat-val" id="moves">0</div></div>
+      <div class="stat"><div class="stat-label">Pairs</div><div class="stat-val" id="pairs">0 / 8</div></div>
+      <div class="stat"><div class="stat-label">Time</div><div class="stat-val" id="timer">0s</div></div>
+      <div class="stat"><div class="stat-label">Best</div><div class="stat-val" id="best">--</div></div>
+    </div>
+
+    <div id="win-banner">
+      <h3>🎉 You won!</h3>
+      <p id="win-msg"></p>
+    </div>
+
+    <div id="grid"></div>
+    <div id="msg"></div>
+
+    <div id="btn-row">
+      <button onclick="newGame()">🔄 New Game</button>
+      <button onclick="setDiff(4,4)">4×4 Hard</button>
+      <button onclick="setDiff(4,3)">4×3 Easy</button>
+    </div>
+
+  </div>
+
+  <footer>Open in any browser — no internet needed</footer>
+
+  <script>
+    const EMOJIS = [
+      "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼",
+      "🐨","🐯","🦁","🐮","🐷","🐸","🐵","🦋"
+    ];
+
+    let cols = 4, rows = 4;
+    let cards = [], flipped = [], matched = 0, moves = 0;
+    let lock = false, started = false;
+    let timerVal = 0, timerID = null, best = null;
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    function $(id) { return document.getElementById(id); }
+    function setDiff(c, r) { cols = c; rows = r; newGame(); }
+
+    function newGame() {
+      clearInterval(timerID);
+      timerVal = 0; moves = 0; matched = 0;
+      flipped = []; lock = false; started = false;
+
+      const pairCount = (cols * rows) / 2;
+      $("moves").textContent = "0";
+      $("pairs").textContent = "0 / " + pairCount;
+      $("timer").textContent = "0s";
+      $("msg").textContent = "";
+      $("win-banner").style.display = "none";
+
+      const emojis = shuffle(EMOJIS).slice(0, pairCount);
+      const deck   = shuffle([...emojis, ...emojis]);
+
+      const grid = $("grid");
+      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      grid.innerHTML = "";
+      cards = [];
+
+      deck.forEach((emoji, i) => {
+        const el = document.createElement("div");
+        el.className = "card";
+        el.innerHTML = `<div class="card-inner">
+          <div class="card-back"></div>
+          <div class="card-front">${emoji}</div>
+        </div>`;
+        el.dataset.emoji = emoji;
+        el.dataset.idx   = i;
+        el.addEventListener("click", () => flip(el));
+        grid.appendChild(el);
+        cards.push(el);
+      });
+    }
+
+    function startTimer() {
+      timerID = setInterval(() => {
+        timerVal++;
+        $("timer").textContent = timerVal + "s";
+      }, 1000);
+    }
+
+    function flip(card) {
+      if (lock) return;
+      if (card.classList.contains("flipped")) return;
+      if (card.classList.contains("matched")) return;
+
+      if (!started) { started = true; startTimer(); }
+      card.classList.add("flipped");
+      flipped.push(card);
+      if (flipped.length < 2) return;
+
+      lock = true;
+      moves++;
+      $("moves").textContent = moves;
+
+      const [a, b] = flipped;
+      if (a.dataset.emoji === b.dataset.emoji) {
+        a.classList.add("matched");
+        b.classList.add("matched");
+        matched++;
+        $("pairs").textContent = matched + " / " + (cols * rows / 2);
+        flipped = []; lock = false;
+        if (matched === (cols * rows) / 2) winGame();
+      } else {
+        $("msg").textContent = "Not a match, try again!";
+        setTimeout(() => {
+          a.classList.remove("flipped");
+          b.classList.remove("flipped");
+          flipped = []; lock = false;
+          $("msg").textContent = "";
+        }, 950);
+      }
+    }
+
+    function winGame() {
+      clearInterval(timerID);
+      if (best === null || timerVal < best) best = timerVal;
+      $("best").textContent = best + "s";
+      $("win-banner").style.display = "block";
+      $("win-msg").textContent = `Completed in ${moves} moves and ${timerVal} seconds — nice work!`;
+    }
+
+    newGame();
+  </script>
+
+</body>
+</html>
